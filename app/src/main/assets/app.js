@@ -5,6 +5,7 @@ const native=window.SecureNative||null;
 let jwt='',refreshToken='',phone='',otpRequestId='',cameras=[],currentCamera=null;
 let ws=null,pc=null,pendingCandidates=[],wantLive=false,reconnectTimer=null,reconnectAttempt=0,mediaMic=null,speakerEnabled=false;
 let segments=[],segmentCache=new Map(),timelineBase=0,timelineBusy=false,timelineTimer=null,screen='auth',callRequested=null;
+let pendingEventId='',eventPhotoUrl=null;
 const DAY=86400000,PXDAY=1400,SPAN=5,BASE=2;
 function notify(message){const t=$('toast');t.textContent=message;t.classList.remove('hidden');clearTimeout(notify.timer);notify.timer=setTimeout(()=>t.classList.add('hidden'),3400)}
 function error(id,message){const x=$(id);x.textContent=message;x.classList.remove('hidden')}
@@ -19,7 +20,7 @@ async function request(path,method='GET',body,retry=true){
   return data;
 }
 async function refreshSession(){const r=await request('/api/auth/refresh','POST',{refreshToken},false);const access=r.accessToken||r.token||r.jwt;if(!access)throw Error('No access token');jwt=access;refreshToken=r.refreshToken||refreshToken;native?.storeSession(jwt,refreshToken,phone)}
-function showAuthenticated(){ $('auth').classList.remove('active');$('signedApp').classList.remove('hidden');$('accountPhone').textContent=phone||'Verified account';navigate('home') }
+function showAuthenticated(){ $('auth').classList.remove('active');$('signedApp').classList.remove('hidden');$('accountPhone').textContent=phone||'Verified account';if(pendingEventId){navigate('events');openEvent(pendingEventId)}else navigate('home') }
 function showAuth(){disconnectLive();$('signedApp').classList.add('hidden');$('auth').classList.add('active');screen='auth'}
 async function requestOtp(){
   clearError('authError');const n=$('phone').value.replace(/\D/g,'');
@@ -43,6 +44,7 @@ function logout(){jwt='';refreshToken='';phone='';cameras=[];currentCamera=null;
 async function init(){
   $('recordDate').value=dateKey(Date.now());
   try{const s=JSON.parse(native?.getSession?.()||'{}');jwt=s.accessToken||'';refreshToken=s.refreshToken||'';phone=s.phone||'';}catch{}
+  pendingEventId=native?.takePendingEvent?.()||pendingEventId;
   if(jwt){showAuthenticated();native?.resyncPush?.();}else showAuth();
 }
 function navigate(target){
@@ -51,7 +53,7 @@ function navigate(target){
   screen=target;
   document.querySelectorAll('#signedApp>.screen').forEach(el=>el.classList.toggle('active',el.id===target));
   for(const [id,tab] of [['tabHome','home'],['tabEvents','events'],['tabDevices','pair'],['tabSettings','settings']])$(id).classList.toggle('active',tab===target);
-  if(target==='home')loadCameras();if(target==='events')loadEvents();if(target==='recordings')loadSegments();
+  if(target==='home')loadCameras();if(target==='events'){closeEvent();loadEvents();}if(target==='recordings')loadSegments();
   if(target==='live')connectLive();
 }
 async function loadCameras(){
@@ -177,12 +179,78 @@ async function seekTo(ms){const s=segments.find(x=>x.start<=ms&&x.end>ms);if(!s)
   }catch(e){$('recordStatus').textContent='Playback unavailable: '+e.message}
 }
 async function loadEvents(){
-  const list=$('eventsList');list.replaceChildren();
-  try{const r=await request('/api/events?date='+encodeURIComponent(dateKey(Date.now())));const events=Array.isArray(r)?r:(r.events||[]);
-    if(!events.length){list.innerHTML='<div class="empty-icon">◷</div><b>No events today</b><p>Activity will appear here when a visitor is detected.</p>';return}
+  const list=$('eventsList');list.replaceChildren();list.classList.remove('empty-card');
+  try{
+    const r=await request('/api/events?date='+encodeURIComponent(dateKey(Date.now())));
+    const events=Array.isArray(r)?r:(r.events||[]);
+    if(!events.length){list.classList.add('empty-card');list.innerHTML='<div class="empty-icon">◷</div><b>No events today</b><p>Visitor history will appear here when person monitoring is connected.</p>';return}
     list.style.display='block';list.style.textAlign='left';
-    events.slice(0,40).forEach(ev=>{const box=document.createElement('div');box.className='settings-row';const inner=document.createElement('div');const title=document.createElement('b');title.textContent=ev.title||ev.type||'Security event';const sub=document.createElement('p');sub.textContent=new Date(ev.timestamp||ev.createdAt).toLocaleString();inner.append(title,sub);box.append(inner);list.append(box)});
-  }catch{list.innerHTML='<div class="empty-icon">◷</div><b>Events unavailable</b><p>Connect the event service to see visit history.</p>'}
+    events.slice(0,80).forEach(ev=>{
+      const id=ev.id||ev._id;if(typeof id!=='string'||!/^[A-Za-z0-9_-]{8,128}$/.test(id))return;
+      const box=document.createElement('button');box.type='button';box.className='settings-row';
+      box.style.width='100%';box.style.textAlign='left';box.style.color='inherit';box.style.background='transparent';
+      const inner=document.createElement('div'),title=document.createElement('b'),sub=document.createElement('p');
+      title.textContent=ev.title||'Person detected';
+      const date=new Date(ev.timestamp||ev.createdAt);
+      sub.textContent=Number.isNaN(date.getTime())?'Visitor event':date.toLocaleString();
+      inner.append(title,sub);box.append(inner);
+      box.onclick=()=>openEvent(id);
+      list.append(box);
+    });
+  }catch{
+    list.classList.add('empty-card');
+    list.innerHTML='<div class="empty-icon">◷</div><b>Events unavailable</b><p>Connect the event service to view visitors.</p>';
+  }
 }
+function closeEvent(){
+  if(eventPhotoUrl){URL.revokeObjectURL(eventPhotoUrl);eventPhotoUrl=null}
+  $('eventDetailPhoto').removeAttribute('src');$('eventDetailPhoto').classList.add('hidden');
+  $('eventDetail').classList.add('hidden');$('eventsList').classList.remove('hidden');
+}
+async function loadEventPhoto(id){
+  try{
+    let res=await fetch(API+'/api/events/'+encodeURIComponent(id)+'/photo',{headers:{Authorization:'Bearer '+jwt}});
+    if(res.status===401 && refreshToken){await refreshSession();res=await fetch(API+'/api/events/'+encodeURIComponent(id)+'/photo',{headers:{Authorization:'Bearer '+jwt}})}
+    if(!res.ok)throw Error('Photo unavailable');
+    const type=res.headers.get('content-type')||'';
+    if(!/^image\/(jpeg|png)/.test(type))throw Error('Unsupported photograph');
+    const bytes=await res.blob();
+    if(bytes.size>1000000)throw Error('Image too large');
+    if(pendingEventId!==id)return;
+    eventPhotoUrl=URL.createObjectURL(bytes);
+    $('eventDetailPhoto').src=eventPhotoUrl;
+    $('eventDetailPhoto').classList.remove('hidden');
+    $('eventPhotoPlaceholder').classList.add('hidden');
+  }catch{$('eventPhotoPlaceholder').textContent='Photograph unavailable or not captured';$('eventPhotoPlaceholder').classList.remove('hidden')}
+}
+async function openEvent(id){
+  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{8,128}$/.test(id))return;
+  pendingEventId=id;
+  if(!jwt){showAuth();return}
+  if(screen!=='events')navigate('events');
+  closeEvent();$('eventsList').classList.add('hidden');$('eventDetail').classList.remove('hidden');
+  $('eventDetailTitle').textContent='Visitor event';$('eventDetailTime').textContent='';
+  $('eventPhotoPlaceholder').textContent='Loading visitor photograph…';
+  $('eventPhotoPlaceholder').classList.remove('hidden');$('eventDetailStatus').textContent='Loading event details…';
+  try{
+    const ev=await request('/api/events/'+encodeURIComponent(id));
+    if(pendingEventId!==id)return;
+    $('eventDetailTitle').textContent=ev.title||'Visitor detected';
+    const dt=new Date(ev.timestamp||ev.createdAt);
+    $('eventDetailTime').textContent=Number.isNaN(dt.getTime())?'':dt.toLocaleString();
+    $('eventDetailStatus').textContent=ev.cameraName||ev.cameraId||'Front Door';
+    if(ev.hasPhoto)await loadEventPhoto(id);
+    else{$('eventPhotoPlaceholder').textContent='No photograph captured for this event';$('eventPhotoPlaceholder').classList.remove('hidden')}
+  }catch{
+    $('eventDetailStatus').textContent='This event is unavailable or your account does not have permission.';
+    $('eventPhotoPlaceholder').textContent='Unable to display photograph';
+  }
+}
+window.secureOpenEvent=id=>{
+  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{8,128}$/.test(id))return;
+  pendingEventId=id;
+  if(!jwt){showAuth();return}
+  openEvent(id);
+};
 window.appBack=()=>{if(['live','events','persons','access','settings','pair'].includes(screen))navigate('home');else if(screen==='recordings')navigate('live');else if(screen==='home')notify('360Secure is running securely')};
 window.addEventListener('load',init);

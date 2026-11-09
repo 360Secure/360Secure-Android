@@ -11,6 +11,13 @@ public class DoorbellMessagingService extends FirebaseMessagingService {
     }
     @Override public void onMessageReceived(RemoteMessage remote) {
         Map<String,String> data = remote.getData();
+        if ("visitor_event".equals(data.get("type")) || "person_detected".equals(data.get("type"))) {
+            String eventId = data.get("eventId");
+            String cameraId = data.get("cameraId");
+            if (SessionStore.access(this).isEmpty()) return;
+            VisitorNotifier.show(this, eventId, cameraId);
+            return;
+        }
         if (!"doorbell".equals(data.get("type"))) return;
         String cameraId = data.get("cameraId"), callId = data.get("callId");
         if (cameraId == null || !cameraId.matches("[A-Za-z0-9_-]{4,64}") || callId == null || !callId.matches("[A-Za-z0-9_-]{8,128}")) return;

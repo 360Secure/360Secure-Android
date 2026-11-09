@@ -67,7 +67,15 @@
       <p id="recordStatus" class="note">Recordings require the authorized playback API.</p>
     </div>
 
-    <div id="events" class="screen scroll-screen"><div class="heading-group"><p class="kicker">ACTIVITY</p><h1>Event history</h1><p class="quiet">A detailed timeline of everything at your door.</p></div><div id="eventsList" class="empty-card"><div class="empty-icon">◷</div><b>Nothing to show yet</b><p>Activity appears when your event API is connected.</p></div></div>
+    <div id="events" class="screen scroll-screen"><div class="heading-group"><p class="kicker">ACTIVITY</p><h1>Event history</h1><p class="quiet">A detailed timeline of everything at your door.</p></div><div id="eventsList" class="empty-card"><div class="empty-icon">◷</div><b>Nothing to show yet</b><p>Activity appears when your event API is connected.</p></div>
+      <section id="eventDetail" class="event-detail hidden" aria-live="polite">
+        <button class="back-btn" onclick="closeEvent()" aria-label="Back to events">←</button>
+        <p class="kicker">VISITOR EVENT</p>
+        <h2 id="eventDetailTitle">Visitor detected</h2>
+        <p id="eventDetailTime" class="quiet"></p>
+        <div class="event-photo-wrap"><img id="eventDetailPhoto" class="hidden" alt="Photograph captured at the front door"><div id="eventPhotoPlaceholder" class="event-photo-placeholder">Photo not available</div></div>
+        <p id="eventDetailStatus" class="quiet">Checking event details…</p>
+      </section></div>
     <div id="persons" class="screen scroll-screen"><div class="heading-group"><p class="kicker">IDENTITIES</p><h1>Persons</h1><p class="quiet">Recognized residents, visitors and guests.</p></div><div class="empty-card"><div class="empty-icon">♙</div><b>Profiles aren't enabled yet</b><p>Face matching and visitor profiles will be added after the backend is connected. Identities always require your review.</p></div></div>
     <div id="access" class="screen scroll-screen"><div class="heading-group"><p class="kicker">CONTROL</p><h1>Door access</h1><p class="quiet">Secure entry, under your control.</p></div><div class="empty-card"><div class="empty-icon">♧</div><b>Remote unlock unavailable</b><p>We'll enable remote access only after authenticated authorization, lock-state feedback and safe manual release are tested.</p></div></div>
     <div id="settings" class="screen scroll-screen"><div class="heading-group"><p class="kicker">PREFERENCES</p><h1>Settings</h1></div><div class="settings-section"><div class="settings-row"><div><b>Phone number</b><p id="accountPhone">Verified account</p></div><span>✓</span></div><div class="settings-row" onclick="native?.openNotificationSettings?.()"><div><b>Doorbell notifications</b><p>Allow call alerts in Android Settings</p></div><span>↗</span></div><div class="settings-row" onclick="native?.openFullScreenCallSettings?.()"><div><b>Full-screen incoming calls</b><p>Allow incoming call display when phone is locked</p></div><span>↗</span></div><div class="settings-row"><div><b>Privacy</b><p>Secure account and camera access</p></div><span>◈</span></div></div><button class="outline-btn signout" onclick="logout()">Sign out</button><p class="app-version">360Secure · Android preview 0.2.0</p></div>

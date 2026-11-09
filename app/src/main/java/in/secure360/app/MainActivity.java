@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     private boolean pageLoaded=false;
     private String pendingCameraId=null;
     private String pendingCallId=null;
+    private String pendingEventId=null;
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         FrameLayout root = new FrameLayout(this);
@@ -53,7 +54,7 @@ public class MainActivity extends Activity {
                 Uri u=req.getUrl();
                 return !"https".equals(u.getScheme()) || !"appassets.androidplatform.net".equals(u.getHost());
             }
-            @Override public void onPageFinished(WebView v, String url) {pageLoaded=true;sendCallIntent();}
+            @Override public void onPageFinished(WebView v, String url) {pageLoaded=true;sendCallIntent();sendEventIntent();}
         });
         web.setWebChromeClient(new WebChromeClient(){
             @Override public void onPermissionRequest(PermissionRequest request) {
@@ -75,10 +76,21 @@ public class MainActivity extends Activity {
         }
         takeCallIntent(getIntent());
     }
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);takeCallIntent(intent);sendCallIntent();}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);takeCallIntent(intent);sendCallIntent();sendEventIntent();}
     private void takeCallIntent(Intent i){
         if (i!=null && "in.secure360.app.ANSWER_DOORBELL".equals(i.getAction())) {
             pendingCameraId=i.getStringExtra("cameraId");pendingCallId=i.getStringExtra("callId");
+        }
+        if (i!=null && Intent.ACTION_VIEW.equals(i.getAction()) && i.getData()!=null) {
+            Uri link=i.getData();
+            if ("https".equals(link.getScheme()) && "camera.360secure.in".equals(link.getHost())
+                    && link.getPathSegments().size()==2 && "e".equals(link.getPathSegments().get(0))) {
+                String event=link.getPathSegments().get(1);
+                if (event.matches("[A-Za-z0-9_-]{8,128}")) {
+                    pendingEventId=event;
+                    SessionStore.setPendingEvent(this,event);
+                }
+            }
         }
     }
     private void sendCallIntent(){
@@ -88,6 +100,13 @@ public class MainActivity extends Activity {
         try {JSONObject j = new JSONObject();j.put("cameraId", camera);j.put("callId", call);
             web.evaluateJavascript("window.secureDoorbell && window.secureDoorbell("+j.toString()+")", null);
         } catch (Exception ignored) { }
+    }
+    private void sendEventIntent(){
+        if (!pageLoaded || pendingEventId==null) return;
+        String id=pendingEventId;
+        pendingEventId=null;
+        SessionStore.takePendingEvent(this);
+        web.evaluateJavascript("window.secureOpenEvent && window.secureOpenEvent(" + JSONObject.quote(id) + ")",null);
     }
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){
         super.onRequestPermissionsResult(requestCode,permissions,results);
@@ -111,6 +130,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void clearSession(){SessionStore.clear(MainActivity.this);}
         @JavascriptInterface public void rememberCamera(String cameraId){SessionStore.setCamera(MainActivity.this,cameraId);}
         @JavascriptInterface public String rememberedCamera(){return SessionStore.camera(MainActivity.this);}
+        @JavascriptInterface public String takePendingEvent(){return SessionStore.takePendingEvent(MainActivity.this);}
         @JavascriptInterface public void resyncPush(){PushRegistrar.sync(getApplicationContext());}
         @JavascriptInterface public void openNotificationSettings(){runOnUiThread(()->{
             Intent i=new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)

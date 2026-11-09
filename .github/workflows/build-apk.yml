@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/android-premium-doorbell-v1
+      - feature/visitor-alerts-deep-links
       - 360secure-integrated
       - main
   pull_request:
@@ -38,6 +39,40 @@ jobs:
         run: node --check app/src/main/assets/app.js
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Configure stable release signing (optional)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/360secure-release.jks"
+            chmod 600 "$RUNNER_TEMP/360secure-release.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/360secure-release.jks" >> "$GITHUB_ENV"
+            echo "SIGN_RELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "SIGN_RELEASE=false" >> "$GITHUB_ENV"
+            echo "Stable release signing not configured; creating test APK only."
+          fi
+      - name: Build signed release APK (if configured)
+        if: env.SIGN_RELEASE == 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle --no-daemon --stacktrace assembleRelease
+      - name: Upload stable signed release APK
+        if: env.SIGN_RELEASE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: 360Secure-Signed-Update-APK
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove temporary signing file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/360secure-release.jks"
       - name: Upload installable debug APK
         if: always()
         uses: actions/upload-artifact@v4

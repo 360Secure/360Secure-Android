@@ -20,6 +20,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Verify https://camera.360secure.in/.well-known/assetlinks.json with release signing cert. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="camera.360secure.in" android:pathPrefix="/e/"/>
+            </intent-filter>
         </activity>
         <activity android:name=".IncomingCallActivity" android:exported="false"
             android:screenOrientation="portrait" android:showWhenLocked="true" android:turnScreenOn="true"

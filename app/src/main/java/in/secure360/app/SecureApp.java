@@ -19,6 +19,7 @@ public class SecureApp extends Application {
     @Override public void onCreate() {
         super.onCreate();
         CallNotifier.createChannel(this);
+        VisitorNotifier.createChannel(this);
         String appId = getString(R.string.fcm_application_id);
         String senderId = getString(R.string.fcm_sender_id);
         String projectId = getString(R.string.fcm_project_id);

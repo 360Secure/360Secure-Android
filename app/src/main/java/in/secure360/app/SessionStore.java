@@ -51,6 +51,15 @@ public final class SessionStore {
     public static String access(Context c) { return read(c).optString("accessToken", ""); }
     public static void setCamera(Context c, String cameraId) { prefs(c).edit().putString("cameraId",cameraId).apply(); }
     public static String camera(Context c) { return prefs(c).getString("cameraId", ""); }
+    public static void setPendingEvent(Context c,String id) {
+        if(id!=null && id.matches("[A-Za-z0-9_-]{8,128}"))
+            prefs(c).edit().putString("pendingEvent",id).apply();
+    }
+    public static String takePendingEvent(Context c) {
+        String id=prefs(c).getString("pendingEvent","");
+        prefs(c).edit().remove("pendingEvent").apply();
+        return id;
+    }
     public static void clear(Context c) { prefs(c).edit().remove("session").remove("iv").remove("cameraId").apply(); }
     private SessionStore(){}
 }

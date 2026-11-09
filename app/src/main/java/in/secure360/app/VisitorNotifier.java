@@ -51,7 +51,10 @@ public final class VisitorNotifier {
             }
             if (conn.getResponseCode() != 200) return;
             try (InputStream stream=conn.getInputStream()) {
-                byte[] bytes=stream.readNBytes(8192);
+                ByteArrayOutputStream body=new ByteArrayOutputStream();
+                byte[] buf=new byte[2048];int n;
+                while((n=stream.read(buf))!=-1){if(body.size()+n>8192)return;body.write(buf,0,n);}
+                byte[] bytes=body.toByteArray();
                 JSONObject json=new JSONObject(new String(bytes,StandardCharsets.UTF_8));
                 String access=json.optString("accessToken","");
                 String next=json.optString("refreshToken","");
@@ -95,8 +98,8 @@ public final class VisitorNotifier {
     public static void show(Context c, String eventId, String cameraId) {
         if (!VisitorAlertPolicy.allow(c,eventId,cameraId))return;
         Bitmap picture=photo(c,eventId);
-        Intent tap = new Intent(c, MainActivity.class, Intent.ACTION_VIEW,
-            Uri.parse("https://camera.360secure.in/e/" + eventId));
+        Intent tap = new Intent(Intent.ACTION_VIEW,
+            Uri.parse("https://camera.360secure.in/e/" + eventId), c, MainActivity.class);
         tap.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pending=PendingIntent.getActivity(c,eventId.hashCode(),tap,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

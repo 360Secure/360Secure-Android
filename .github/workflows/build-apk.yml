@@ -35,6 +35,33 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Configure Firebase client from GitHub repository variables
+        env:
+          FCM_APPLICATION_ID: ${{ vars.FCM_APPLICATION_ID }}
+          FCM_API_KEY: ${{ vars.FCM_API_KEY }}
+          FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
+          FCM_SENDER_ID: ${{ vars.FCM_SENDER_ID }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          p = Path("app/src/main/res/values/strings.xml")
+          r = ET.parse(p)
+          root = r.getroot()
+          mapping = {
+            "fcm_application_id": "FCM_APPLICATION_ID",
+            "fcm_api_key": "FCM_API_KEY",
+            "fcm_project_id": "FCM_PROJECT_ID",
+            "fcm_sender_id": "FCM_SENDER_ID",
+          }
+          for element in root.findall("string"):
+              envkey = mapping.get(element.attrib.get("name"))
+              if envkey:
+                  element.text = os.environ.get(envkey, "")
+          r.write(p, encoding="utf-8", xml_declaration=True)
+          print("Firebase client configured:", all(os.getenv(k) for k in mapping.values()))
+          PY
       - name: Verify JavaScript
         run: node --check app/src/main/assets/app.js
       - name: Build debug APK

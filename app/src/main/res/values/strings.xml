@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">360Secure</string>
+    <!-- Copy your Firebase project values into your local strings.xml only after configuring FCM.
+         The app builds without them; background notifications cannot work until configured. -->
+    <string name="fcm_application_id"></string>
+    <string name="fcm_api_key"></string>
+    <string name="fcm_project_id"></string>
+    <string name="fcm_sender_id"></string>
+</resources>
